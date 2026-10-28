@@ -17,11 +17,16 @@ deliverable is a Markdown plan with verified prices and links.
 ```sh
 uv sync
 uv run allegro-shop doctor
-uv run allegro-shop search "wago 221-413" --json
-uv run allegro-shop plan config/request.example.toml
+uv run allegro-shop shop "dwa wago 221-413, tylko nowe, do 60 zł"
 ```
 
-`plan` writes `runs/<timestamp>-<name>.md` and `.json`.
+That is the intended path: a sentence in, a plan out. It writes
+`runs/<timestamp>-<name>.md` and `.json`, then you run `verify <file>` before
+buying. `--dry-run` shows the parsed request without fetching anything;
+`--justify` adds a written summary.
+
+Prefer files? `request-from-text` writes the same request as an editable TOML,
+and `plan config/request.example.toml` has the same behaviour.
 
 ## What it will not do
 
@@ -45,3 +50,4 @@ human handoff; using it is your decision and your account's risk.
 - `tests/fixtures/allegro/` — parser fixtures (provenance in their README)
 - `docs/` — research, pipeline explanation, operations, ADRs
 - `config/request.example.toml` — request format
+- `skills/allegro-shopping/SKILL.md` — agent skill that drives the CLI from prose

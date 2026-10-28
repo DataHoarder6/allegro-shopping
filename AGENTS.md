@@ -23,8 +23,12 @@ prices, sums or the winner.
 
 ## Commands
 
+If a human asks in prose, use `allegro-shop shop "<their sentence>"` — it parses
+intent once and does the rest. Do not browse Allegro by hand.
+
 | Task | Command |
 |---|---|
+| one command, prose in | `uv run allegro-shop shop "<sentence>" [--justify]` |
 | environment check | `uv run allegro-shop doctor` |
 | everything CI runs | `./scripts/check.sh` |
 | tests (offline) | `uv run pytest` |

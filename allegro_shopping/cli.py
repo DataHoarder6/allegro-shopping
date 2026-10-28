@@ -156,6 +156,27 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_shop(args: argparse.Namespace) -> int:
+    """One command: sentence in, plan out. The only LLM call is intent parsing."""
+    rules = resolve_rules(args.rules)
+    request = llm.request_from_text(args.text, runner=llm.run_opencode, model=args.model)
+    print(llm.request_to_toml(request), file=sys.stderr, end="")
+    if args.dry_run:
+        return 0
+    with _store(args) as store:
+        pages, client = _with_client(args, rules, store)
+        with pages.open():
+            result = run_request(
+                request, client, rules, refresh=args.refresh, budget=Budget(rules.budgets)
+            )
+    markdown_path, json_path = write_run(result, Path(args.out))
+    print(to_markdown(result))
+    print(f"wrote {markdown_path} and {json_path}")
+    if args.justify:
+        print(llm.justify(to_json(result), runner=llm.run_opencode, model=args.model))
+    return 0
+
+
 def cmd_request_from_text(args: argparse.Namespace) -> int:
     request = llm.request_from_text(args.text, runner=llm.run_opencode, model=args.model)
     document = llm.request_to_toml(request)
@@ -244,6 +265,17 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("url")
     capture.add_argument("--out", required=True)
     capture.set_defaults(func=cmd_capture)
+
+    shop = sub.add_parser("shop", help="sentence in, plan out (one LLM call)")
+    shop.add_argument("text")
+    shop.add_argument("--out", default="runs")
+    shop.add_argument("--model")
+    shop.add_argument("--refresh", action="store_true")
+    shop.add_argument("--justify", action="store_true", help="add one LLM-written summary")
+    shop.add_argument(
+        "--dry-run", action="store_true", help="show the parsed request, fetch nothing"
+    )
+    shop.set_defaults(func=cmd_shop)
 
     from_text = sub.add_parser("request-from-text", help="turn prose into a request file")
     from_text.add_argument("text")

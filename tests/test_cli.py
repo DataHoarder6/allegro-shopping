@@ -324,3 +324,69 @@ def test_justify_prints_model_text(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(llm, "run_opencode", lambda prompt, model=None: "It is cheaper.")
     assert main(["justify", str(run_file)]) == 0
     assert "It is cheaper." in capsys.readouterr().out
+
+
+def test_shop_dry_run_prints_the_parsed_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:  # type: ignore[no-untyped-def]
+    import json as _json
+
+    from allegro_shopping import llm
+
+    payload = {
+        "meta": {"name": "wago"},
+        "items": [
+            {
+                "label": "wago-3",
+                "query": "wago 221-413",
+                "quantity": 2,
+                "max_price_grosze": 6000,
+                "allow_used": False,
+            }
+        ],
+    }
+    monkeypatch.setattr(llm, "run_opencode", lambda prompt, model=None: _json.dumps(payload))
+    code = main(["shop", "dwa wago do 60 zl", "--dry-run"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "quantity = 2" in captured.err
+
+
+def test_shop_runs_and_writes_a_report(
+    tmp_path: Path, fake_pages, monkeypatch, capsys
+) -> None:  # type: ignore[no-untyped-def]
+    import json as _json
+
+    from allegro_shopping import llm
+
+    payload = {
+        "meta": {"name": "wago"},
+        "items": [
+            {
+                "label": "wago-3",
+                "query": "wago 221",
+                "quantity": 1,
+                "max_price_grosze": 6000,
+                "allow_used": False,
+            }
+        ],
+    }
+    offers = {
+        "https://allegro.pl/oferta/18330930177": OFFER,
+        "https://allegro.pl/oferta/18462382353": OFFER,
+        "https://allegro.pl/oferta/18529923195": OFFER,
+    }
+
+    class ShopSource(FakeSource):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            super().__init__(*args, **kwargs)
+            self.markup = {"https://allegro.pl/listing?string=wago+221": LISTING, **offers}
+
+    monkeypatch.setattr("allegro_shopping.cli.PlaywrightPageSource", ShopSource)
+    monkeypatch.setattr(llm, "run_opencode", lambda prompt, model=None: _json.dumps(payload))
+    out_dir = tmp_path / "runs"
+    code = main(["--db", str(tmp_path / "h.db"), "shop", "one wago", "--out", str(out_dir)])
+    captured = capsys.readouterr()
+    assert code == 0, captured.err
+    assert "# wago" in captured.out
+    assert list(out_dir.glob("*.md"))
