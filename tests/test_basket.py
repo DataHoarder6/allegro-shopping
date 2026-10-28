@@ -160,3 +160,21 @@ def test_solver_matches_brute_force(rows: list) -> None:
     basket = plan(candidates, basket_rules)
     actual = int(basket.grand_total) + basket_rules.seller_penalty_grosze * basket.sellers_used
     assert actual == expected
+
+
+def test_baseline_excludes_the_tie_break_penalty(rules: Rules) -> None:
+    basket = plan([candidate("a", "1000001", 5000, "s1")], rules_with(rules, sellers_max=1))
+    assert basket.baseline_total == basket.grand_total
+    assert basket.savings == 0
+
+
+def test_plan_is_reproducible(rules: Rules) -> None:
+    candidates = [
+        candidate("a", "1000001", 5000, "s1"),
+        candidate("a", "1000002", 5000, "s1"),
+        candidate("a", "1000003", 5000, "s1"),
+    ]
+    chosen = {
+        plan(candidates, rules_with(rules, sellers_max=1)).lines[0].offer.offer_id for _ in range(3)
+    }
+    assert chosen == {"1000001"}

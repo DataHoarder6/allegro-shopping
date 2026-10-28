@@ -105,7 +105,13 @@ def _fee_table(candidates: Sequence[Candidate], rules: BasketRules) -> dict[str,
     }
 
 
-def evaluate(selection: Mapping[str, Candidate], fee: Mapping[str, int], rules: BasketRules) -> int:
+def evaluate(
+    selection: Mapping[str, Candidate],
+    fee: Mapping[str, int],
+    rules: BasketRules,
+    *,
+    include_penalty: bool = True,
+) -> int:
     """Total grosze for one assignment, under the same rules the solver uses."""
     subtotal: dict[str, int] = {}
     total = 0
@@ -115,7 +121,8 @@ def evaluate(selection: Mapping[str, Candidate], fee: Mapping[str, int], rules: 
         subtotal[seller] = subtotal.get(seller, 0) + int(candidate.line_goods)
     for seller, subtotal_grosze in subtotal.items():
         total += delivery_for(subtotal_grosze, fee[seller], rules)
-        total += rules.seller_penalty_grosze
+        if include_penalty:
+            total += rules.seller_penalty_grosze
     return total
 
 
@@ -212,9 +219,12 @@ def plan(candidates: Sequence[Candidate], rules: BasketRules) -> BasketPlan:
 
     # Second pass: among all minimum-cost baskets, prefer the higher-scoring one.
     model.Add(sum(objective) <= best_cost)
+    # Among equal-cost baskets prefer higher scores, then the earlier candidate
+    # (candidates arrive price-ordered), so the output is reproducible.
     score_terms = [
-        int(candidate.score * 1000) * x[(candidate.item_label, candidate.offer.offer_id)]
-        for candidate in candidates
+        (int(candidate.score * 1000) + len(candidates) - index)
+        * x[(candidate.item_label, candidate.offer.offer_id)]
+        for index, candidate in enumerate(candidates)
     ]
     model.Maximize(sum(score_terms))
     status = solver.Solve(model)
@@ -288,4 +298,4 @@ def _baseline(candidates: Sequence[Candidate], fee: Mapping[str, int], rules: Ba
     selection: dict[str, Candidate] = {}
     for label, offers in items.items():
         selection[label] = min(offers, key=lambda c: (int(c.offer.price), c.offer.offer_id))
-    return evaluate(selection, fee, rules)
+    return evaluate(selection, fee, rules, include_penalty=False)
