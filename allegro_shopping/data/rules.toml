@@ -1,0 +1,69 @@
+# Shipped defaults for allegro-shopping. Copy this file, edit, and pass --rules.
+# Every key is required; unknown keys are a hard error.
+
+[meta]
+version = 1
+updated = "2026-10-28"
+
+[freshness]
+# How long an observation of each kind stays usable, in hours.
+search_hours = 6      # listing pages: cheap to serve, they only seed candidates
+offer_hours = 2       # price/delivery/stock: re-verified before any recommendation
+detail_hours = 168    # description, specs, product page
+seller_hours = 168    # seller profile, ratings
+
+[budgets]
+# Hard caps. Hitting any of them fails the run; a truncated candidate set must
+# never be reported as a complete recommendation.
+max_search_pages = 3
+max_offers = 40
+max_external_lookups = 8
+max_llm_calls = 3
+max_wall_seconds = 600
+
+[score]
+version = 1
+
+[score.weights]
+# Sum must be exactly 100.
+price = 30
+landed = 25
+seller = 15
+rating = 15
+specs = 10
+delivery = 5
+
+[score.bounds]
+# Partial-value anchors. Price is scored against the item's own hard cap:
+# 1.0 at price_floor_grosze, 0.0 at the cap.
+price_floor_grosze = 500
+delivery_baseline_hours = 24
+delivery_slow_hours = 168
+# Shrunk rating: (rating_count * rating + prior_weight * prior) / (rating_count + prior_weight)
+rating_prior = 4.2
+rating_prior_weight = 25
+# Value used for a term whose input is unknown; the confidence drops instead.
+missing_term_value = 0.5
+
+[basket]
+sellers_max = 3
+# Best N offers per item considered by the basket solver.
+shortlist = 3
+# Allegro Smart! is a paid subscription. Set false if you do not have it: then
+# every seller charges its own delivery fee and the threshold is irrelevant.
+smart_active = true
+# 49.90 PLN per seller, unified since 2026-03-02.
+smart_minimum_grosze = 4990
+locker_delivery_grosze = 1299
+courier_delivery_grosze = 1699
+prefer_locker = true
+# Added per used seller so the solver prefers fewer parcels when costs tie.
+seller_penalty_grosze = 1
+
+[site]
+base_url = "https://allegro.pl"
+listing_ready_selector = "article"
+offer_ready_selector = "h1"
+locale = "pl-PL"
+timezone = "Europe/Warsaw"
+max_price_grosze = 1000000

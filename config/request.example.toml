@@ -1,0 +1,25 @@
+# A request is what you want bought. Caps are hard gates.
+# Copy, edit, then: allegro-shop plan config/my-request.toml
+
+[meta]
+name = "Wago junction box restock"
+notes = "rebuilding the garage junction box; buy only genuine WAGO"
+
+[[items]]
+label = "wago-3"
+query = "wago 221-413"
+quantity = 2
+# Grosze. The gate compares the offer price (not landed) against this.
+max_price_grosze = 6000
+# false => anything not "new" is gated out, including unknown condition.
+allow_used = false
+required_specs = { Model = "221-413" }
+min_rating = 4.0
+
+[[items]]
+label = "wago-5"
+query = "wago 221-415"
+quantity = 1
+max_price_grosze = 9000
+allow_used = false
+required_specs = { Model = "221-415" }

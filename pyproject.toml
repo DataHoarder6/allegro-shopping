@@ -1,0 +1,77 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "allegro-shopping"
+version = "0.1.0"
+description = "Deterministic Allegro product research, comparison and basket planning with an LLM at the edges."
+requires-python = ">=3.11"
+dependencies = [
+    "web-agent",
+    "lxml>=5",
+    "cssselect>=1.2",
+    "ortools>=9.10",
+    "playwright>=1.49",
+]
+
+[project.scripts]
+allegro-shop = "allegro_shopping.cli:main"
+
+[tool.uv.sources]
+web-agent = { path = "../web-agent", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "hypothesis>=6",
+    "ruff>=0.9",
+    "mypy>=1.13",
+    "types-lxml>=2024.11",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["allegro_shopping"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers"
+markers = [
+    "live: touches allegro.pl through the real Chrome profile (never in CI)",
+]
+filterwarnings = [
+    "error",
+    # sqlite3 emits ResourceWarning when a test-owned connection is GCed; production
+    # code always uses `with Store(...)`. Anything else stays an error.
+    "ignore::ResourceWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["allegro_shopping"]
+warn_unreachable = true
+
+# ortools 9.15 ships stubs that only declare snake_case names; the runtime
+# keeps the historical CamelCase API we use. Narrow the relaxation to one file.
+[[tool.mypy.overrides]]
+module = "allegro_shopping.basket"
+disable_error_code = ["attr-defined"]
+
+[tool.coverage.run]
+branch = true
+source = ["allegro_shopping"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]
