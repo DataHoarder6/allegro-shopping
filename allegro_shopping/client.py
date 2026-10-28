@@ -13,12 +13,14 @@ offer TTL; the policy lives in `Cache.require_fresh` and is enforced here.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from .cache import Cache
 from .config import Rules
 from .errors import FetchFailure, UsageError
-from .identity import canonical_url, listing_url, offer_id_from_url, seller_subject
+from .identity import canonical_url, listing_url, seller_subject
 from .models import Offer, Product, Seller, utc_now
 from .parse import (
     SkippedCard,
@@ -28,6 +30,43 @@ from .parse import (
     parse_seller,
 )
 from .session import PageSource
+
+
+def merge_offer(base: Offer | None, deep: Offer) -> Offer:
+    """Deep page wins on facts it states; the listing card fills the gaps.
+
+    Delivery cost, thumbnail and sponsorship live on the card, not on the offer
+    page. Dropping them on the deep dive silently removed the `landed` and
+    `delivery` terms — and made the basket fall back to a default fee.
+    """
+    if base is None:
+        return deep
+    return replace(
+        deep,
+        product_id=deep.product_id or base.product_id,
+        ean=deep.ean or base.ean,
+        delivery_grosze=(
+            deep.delivery_grosze if deep.delivery_grosze is not None else base.delivery_grosze
+        ),
+        delivery_text=deep.delivery_text or base.delivery_text,
+        smart=deep.smart if deep.smart is not None else base.smart,
+        sponsored=deep.sponsored or base.sponsored,
+        in_stock=deep.in_stock if deep.in_stock is not None else base.in_stock,
+        rating_avg=deep.rating_avg if deep.rating_avg is not None else base.rating_avg,
+        rating_count=deep.rating_count if deep.rating_count is not None else base.rating_count,
+        seller_super_seller=(
+            deep.seller_super_seller
+            if deep.seller_super_seller is not None
+            else base.seller_super_seller
+        ),
+        seller_positive_percent=(
+            deep.seller_positive_percent
+            if deep.seller_positive_percent is not None
+            else base.seller_positive_percent
+        ),
+        thumbnail=deep.thumbnail or base.thumbnail,
+        specs=deep.specs or base.specs,
+    )
 
 
 class AllegroClient:
@@ -89,8 +128,9 @@ class AllegroClient:
         url = cached.url if cached is not None else f"{self.rules.site.base_url}/oferta/{offer_id}"
         markup = self.pages.fetch(url, self.rules.site.offer_ready_selector)
         detail = parse_offer_page(markup, url)
-        self.cache.add_offer(detail.offer)
-        return detail.offer
+        merged = merge_offer(cached, detail.offer)
+        self.cache.add_offer(merged)
+        return merged
 
     def product_detail(self, product_id: str, *, refresh: bool = False) -> Product:
         """The catalog page: the spec table shared by every offer of this product.
@@ -135,9 +175,12 @@ class AllegroClient:
     def capture(self, url: str) -> str:
         """Fetch a page exactly as the parser would receive it."""
         canon = canonical_url(url)
-        if offer_id_from_url(canon) is not None:
+        path = urlsplit(canon).path
+        if "/uzytkownik/" in path:
+            selector = "body"
+        elif "/produkt/" in path or "/oferta/" in path:
             selector = self.rules.site.offer_ready_selector
-        elif "/listing" in canon or "/kategoria/" in canon:
+        elif "/listing" in path or "/kategoria/" in path:
             selector = self.rules.site.listing_ready_selector
         else:
             raise UsageError(f"cannot tell listing from offer page: {url}")

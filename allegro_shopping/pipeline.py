@@ -78,6 +78,21 @@ class Budget:
         }
 
 
+def _card_seller_facts(offer: Offer) -> Seller:
+    """Seller facts come from the listing card: no extra page, no guesswork.
+
+    Allegro publishes a positive-feedback percentage and Super Sprzedawca on
+    every card. Star ratings live on a separate /oceny page and measure the same
+    thing less cheaply, so they are only used when already known.
+    """
+    return Seller(
+        login=offer.seller_login,
+        super_seller=bool(offer.seller_super_seller),
+        positive_feedback_percent=offer.seller_positive_percent,
+        url=f"https://allegro.pl/uzytkownik/{offer.seller_login}",
+    )
+
+
 @dataclass(frozen=True)
 class ItemOutcome:
     item: Item
@@ -136,7 +151,6 @@ def run_request(
 
         shortlist = _select_candidates(offers, remaining_offers)
         remaining_offers -= len(shortlist)
-        sellers: dict[str, Seller | None] = {}
         products: dict[str, Product | None] = {}
         spec_sources: list[tuple[str, str]] = []
         scored: list[tuple[Offer, ScoreResult]] = []
@@ -154,9 +168,7 @@ def run_request(
             client.cache.require_fresh(
                 "offer", deep.fetched_at, what=f"offer {deep.offer_id}", now=now()
             )
-            if deep.seller_login not in sellers:
-                run_budget.spend_page()
-                sellers[deep.seller_login] = client.seller(deep.seller_login, refresh=refresh)
+            seller = _card_seller_facts(deep)
             specs = deep.specs
             if deep.product_id is not None:
                 if deep.product_id not in products:
@@ -178,7 +190,7 @@ def run_request(
                 item,
                 ScoreInput(
                     offer=deep,
-                    seller=sellers[deep.seller_login],
+                    seller=seller,
                     delivery_hours=None,
                     quantity=item.quantity,
                     specs=specs if specs is not deep.specs else None,

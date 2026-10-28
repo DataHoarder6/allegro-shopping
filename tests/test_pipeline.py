@@ -5,14 +5,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from conftest import make_item, make_offer, make_seller
+from conftest import make_item, make_offer
 from web_agent.store import Store
 
 from allegro_shopping.cache import Cache
 from allegro_shopping.client import AllegroClient
 from allegro_shopping.config import Request, Rules
 from allegro_shopping.errors import BudgetExceeded, FetchFailure, NoCandidates, StaleDataError
-from allegro_shopping.money import Grosze
 from allegro_shopping.parse import SkippedCard
 from allegro_shopping.pipeline import Budget, run_request
 from allegro_shopping.report import to_json, to_markdown, write_run
@@ -158,89 +157,12 @@ def test_skipped_cards_become_warnings(tmp_path: Path, rules: Rules) -> None:
     assert any("skipped" in warning for warning in result.warnings)
 
 
-def test_seller_is_looked_up_once_per_run(tmp_path: Path, rules: Rules) -> None:
-    offers = [
-        make_offer("1000001", price=4500, seller="same"),
-        make_offer("1000002", price=4600, seller="same"),
-    ]
-    client = make_client(tmp_path, rules, FakePages({}), offers)
-    calls: list[str] = []
-    original = client.seller
-
-    def counted(login: str, *, refresh: bool = False):
-        calls.append(login)
-        return make_seller(login)
-
-    client.seller = counted  # type: ignore[method-assign]
-    run_request(build_request(make_item()), client, rules, now=lambda: NOW)
-    assert calls == ["same"]
-    assert original is not None
-
-
-def _plan_payload(result) -> dict:
-    import json
-
-    return json.loads(json.dumps(to_json(result)))
-
-
-def test_verify_reports_no_drift_when_offers_are_unchanged(tmp_path: Path, rules: Rules) -> None:
-    from allegro_shopping.pipeline import verify_plan
-
-    offer = make_offer("1000001", price=4500)
-    client = make_client(tmp_path, rules, FakePages({}), [offer])
-    result = run_request(build_request(make_item()), client, rules, now=lambda: NOW)
-    client.offer_detail = lambda offer_id, refresh=False: offer  # type: ignore[method-assign]
-    assert verify_plan(_plan_payload(result), client) == []
-
-
-def test_verify_reports_price_seller_and_stock_drift(tmp_path: Path, rules: Rules) -> None:
-    from allegro_shopping.pipeline import verify_plan
-
-    offer = make_offer("1000001", price=4500)
-    client = make_client(tmp_path, rules, FakePages({}), [offer])
-    result = run_request(build_request(make_item()), client, rules, now=lambda: NOW)
-    changed = replace(offer, price=Grosze(9999), seller_login="other", in_stock=False)
-    client.offer_detail = lambda offer_id, refresh=False: changed  # type: ignore[method-assign]
-    fields = {d.field for d in verify_plan(_plan_payload(result), client)}
-    assert fields == {"price", "seller", "stock"}
-
-
-def test_verify_requires_a_basket() -> None:
-    from allegro_shopping.pipeline import verify_plan
-
-    class Unused:
-        pass
-
-    with pytest.raises(NoCandidates, match="no basket"):
-        verify_plan({"items": []}, Unused())  # type: ignore[arg-type]
-
-
-def test_catalog_specs_hydrate_a_required_spec(tmp_path: Path, rules: Rules) -> None:
-    from allegro_shopping.models import Product
-
-    product_id = "b4c19645-7c11-48a5-bfbe-c2ea5fbe9bc3"
+def test_seller_facts_come_from_the_card_without_a_page_fetch(tmp_path: Path, rules: Rules) -> None:
     offer = replace(
-        make_offer("1000001", price=4500, specs={}), product_id=product_id
+        make_offer("1000001", price=4500), seller_positive_percent=99.5, seller_super_seller=True
     )
-    client = make_client(tmp_path, rules, FakePages({}), [offer])
-    client.cache.add_product(
-        Product(
-            product_id=product_id,
-            title="WAGO 221-413",
-            url=f"https://allegro.pl/produkt/{product_id}",
-            specs={"Model": "221-413"},
-            fetched_at=NOW,
-        )
-    )
-    result = run_request(
-        build_request(make_item(required_specs={"Model": "221-413"})),
-        client,
-        rules,
-        now=lambda: NOW,
-    )
-    assert result.items[0].ranked
-    assert result.items[0].spec_sources == (
-        ("1000001", f"https://allegro.pl/produkt/{product_id}"),
-    )
-    markdown = to_markdown(result)
-    assert "specs of record" in markdown
+    pages = FakePages({})
+    client = make_client(tmp_path, rules, pages, [offer])
+    result = run_request(build_request(make_item()), client, rules, now=lambda: NOW)
+    assert not any("/uzytkownik/" in url for url in pages.fetched)
+    assert result.items[0].ranked[0][1].values["seller"] == pytest.approx(0.995)

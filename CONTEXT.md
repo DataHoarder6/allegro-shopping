@@ -18,9 +18,10 @@ Identified by Allegro's numeric offer id.
 product UUID, with EAN/GTIN when the page exposes it. Two offers are the same
 product only by id, never by title similarity.
 
-**Seller** — the account shipping the offer. Has a rating, a rating count and
-(possibly) Super Sprzedawca status. Seller ratings measure logistics, product
-ratings measure the item; they are never blended.
+**Seller** — the account shipping the offer. Trust is the positive-feedback
+percentage from the listing card (or a star rating when one is already known),
+plus Super Sprzedawca. Seller signals measure logistics, product ratings measure
+the item; they are never blended.
 
 **Deep dive** — fetching an offer page to obtain facts a listing card lacks:
 condition, stock, specs, description, rating. Budgeted, and the only expensive

@@ -40,6 +40,7 @@ class ScoreResult:
     total: float
     terms: dict[str, float]
     values: dict[str, float | None]
+    spec_evidence: dict[str, str]
     weights: dict[str, float]
     confidence: float
     confidence_badge: str
@@ -52,6 +53,9 @@ class ScoreResult:
         lines = [
             f"score {self.total:.1f}/100 (v{self.score_version}, confidence {self.confidence:.0%})"
         ]
+        if self.spec_evidence:
+            evidence = ", ".join(f"{k}={v}" for k, v in sorted(self.spec_evidence.items()))
+            lines.append(f"  spec evidence: {evidence}")
         for term, weight in sorted(self.weights.items(), key=lambda kv: -kv[1]):
             value = self.values[term]
             shown = "unknown" if value is None else f"{value:.3f}"
@@ -86,20 +90,33 @@ def shrunk_rating(rating: float | None, count: int | None, rules: ScoreRules) ->
     return (reviews * rating + weight * prior) / (reviews + weight)
 
 
-def spec_match(specs: Mapping[str, str], required: Mapping[str, str]) -> tuple[float | None, bool]:
-    """Fraction of required specs present and matching. Unknown when no spec data."""
+def spec_match(
+    specs: Mapping[str, str], required: Mapping[str, str], *, title: str = ""
+) -> tuple[float | None, dict[str, str]]:
+    """Fraction of required specs matched, with the evidence behind each one.
+
+    Evidence is either the parameter table (`specs`) or the offer title. The
+    title is a seller claim, not a datasheet, so it is recorded as such — but it
+    is real evidence: model numbers live in titles far more reliably than in
+    Allegro's parameter table, which is category-shaped, not model-shaped.
+    """
     if not required:
-        return 1.0, False
-    if not specs:
-        return None, False
+        return 1.0, {}
+    haystack_title = title.lower()
     matched = 0
+    evidence: dict[str, str] = {}
     for key, expected in required.items():
+        needle = expected.strip().lower()
         actual = next((v for k, v in specs.items() if k.lower() == key.lower()), None)
-        if actual is None:
-            continue
-        if expected.strip().lower() in actual.strip().lower():
+        if actual is not None and needle in actual.strip().lower():
             matched += 1
-    return matched / len(required), True
+            evidence[key] = "specs"
+        elif needle and needle in haystack_title:
+            matched += 1
+            evidence[key] = "title"
+    if not specs and not evidence:
+        return None, {}
+    return matched / len(required), evidence
 
 
 def gate_failures(
@@ -125,12 +142,18 @@ def gate_failures(
     if item.required_specs:
         known = specs if specs is not None else offer.specs
         if not known:
-            failures.append("required specs, no spec data on the offer")
+            if all(
+                expected.strip().lower() not in offer.title.lower()
+                for expected in item.required_specs.values()
+            ):
+                failures.append("required specs, no spec data on the offer")
         else:
+            title = offer.title.lower()
             missing = [
                 key
-                for key in item.required_specs
+                for key, expected in item.required_specs.items()
                 if not any(k.lower() == key.lower() for k in known)
+                and expected.strip().lower() not in title
             ]
             if missing:
                 failures.append(f"missing specs {missing}")
@@ -150,6 +173,7 @@ def score_offer(item: Item, candidate: ScoreInput, rules: ScoreRules) -> ScoreRe
             total=0.0,
             terms={term: 0.0 for term in weights},
             values={term: None for term in weights},
+            spec_evidence={},
             weights=weights,
             confidence=0.0,
             confidence_badge="low",
@@ -173,17 +197,21 @@ def score_offer(item: Item, candidate: ScoreInput, rules: ScoreRules) -> ScoreRe
         landed_per_unit, bounds.price_floor_grosze, float(item.max_price_grosze)
     )
 
-    seller_rating = shrunk_rating(
-        candidate.seller.rating if candidate.seller else None,
-        candidate.seller.ratings_count if candidate.seller else None,
-        rules,
-    )
-    seller_value = None if seller_rating is None else _clamp(seller_rating / 5.0)
+    seller = candidate.seller
+    if seller is not None and seller.rating is not None:
+        seller_rating = shrunk_rating(seller.rating, seller.ratings_count, rules)
+        seller_value = None if seller_rating is None else _clamp(seller_rating / 5.0)
+    elif seller is not None and seller.positive_feedback_percent is not None:
+        seller_value = _clamp(seller.positive_feedback_percent / 100.0)
+    else:
+        seller_value = None
 
     product_rating = shrunk_rating(offer.rating_avg, offer.rating_count, rules)
     rating_value = None if product_rating is None else _clamp(product_rating / 5.0)
 
-    specs_value, _verified = spec_match(effective_specs, item.required_specs)
+    specs_value, spec_evidence = spec_match(
+        effective_specs, item.required_specs, title=offer.title
+    )
 
     delivery_value = None
     if candidate.delivery_hours is not None:
@@ -216,6 +244,7 @@ def score_offer(item: Item, candidate: ScoreInput, rules: ScoreRules) -> ScoreRe
         total=total,
         terms=terms,
         values=raw_values,
+        spec_evidence=spec_evidence,
         weights=weights,
         confidence=confidence,
         confidence_badge=badge,

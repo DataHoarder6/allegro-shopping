@@ -58,5 +58,8 @@ imported (`nix develop` sets it).
 - Product pages and offer pages are different subjects with different URLs.
   `/produkt/<uuid>?offerId=<id>` names both.
 - Smart! is per **seller**, not per basket: 49.90 zł each, since 2026-03-02.
+- Seller trust is read from the listing card (`positiveFeedbackPercent`); the
+  profile page has no seller stars (ADR-0011). Delivery cost is on the card,
+  the deep dive loses it unless merged (see `merge_offer`).
 - `web-agent` owns the hoard store and the browser fetcher; do not fork them.
   Library changes go there with their tests.

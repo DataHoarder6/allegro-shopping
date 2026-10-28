@@ -13,20 +13,27 @@ One `plan` invocation, in order. Every step is deterministic except where marked
    ones worth spending a page on.
 4. **Deep dive.** `AllegroClient.offer_detail` serves a fresh *deep* offer from
    cache or fetches the offer page, parsing JSON-LD and the serialized boxes.
-   The parser records specs, condition, stock, EAN and rating. The product row
-   is written too, so later runs reuse the spec table.
-5. **Gate.** `score_offer` applies hard filters first: cap, condition, stock,
-   required specs, minimum rating. Failures are kept with reasons and shown in
-   the report.
-6. **Score.** Each surviving offer gets partial values per term, weighted to a
+   It records specs, condition, stock, EAN and rating, and `merge_offer` keeps
+   the card-only facts (delivery price, thumbnail, sponsorship, seller feedback
+   percentage) that the offer page does not repeat. Seller trust therefore costs
+   no extra page (ADR-0011).
+5. **Catalog specs.** When an offer has a product id, its catalog page is
+   fetched once per product (detail TTL) and merged *over* the offer's specs.
+   This is the spec table of record (ADR-0009); the report names its URL.
+6. **Gate.** `score_offer` applies hard filters first: cap, condition, stock,
+   required specs, minimum rating. A required spec counts as matched when the
+   parameter table or the offer title carries the value; the evidence is
+   recorded per key. Failures are kept with reasons and shown in the report.
+
+7. **Score.** Each surviving offer gets partial values per term, weighted to a
    0..100 total, with confidence and its weakest term. Unknown inputs take the
    configured neutral value.
-7. **Shortlist.** The best `basket.shortlist` offers per item go to the solver.
-8. **Solve.** `basket.plan` builds a CP-SAT model: one offer per item,
+8. **Shortlist.** The best `basket.shortlist` offers per item go to the solver.
+9. **Solve.** `basket.plan` builds a CP-SAT model: one offer per item,
    per-seller subtotal, delivery free above the Smart! threshold when active,
    at most `sellers_max` sellers. It minimises the true total, then breaks ties
    on score. Infeasible constraints raise `NoCandidates`.
-9. **Render.** `report.to_markdown` and `to_json` write the deliverable: per-item
+10. **Render.** `report.to_markdown` and `to_json` write the deliverable: per-item
    ranking with the age of each price, the basket sliced by seller, the
    cheapest-per-item baseline and the saving.
 

@@ -132,3 +132,23 @@ def test_deep_offer_without_specs_is_not_refetched(tmp_path: Path, rules: Rules)
     instance.cache.add_offer(offer)
     assert instance.offer_detail("1000001").price == 4500
     assert pages.fetched == []
+
+
+def test_deep_dive_keeps_card_delivery_and_sponsorship(tmp_path: Path, rules: Rules) -> None:
+    card = replace(
+        make_offer("1000001", price=4500, delivery_grosze=1049),
+        sponsored=True,
+        thumbnail="https://img/x.jpg",
+        seller_positive_percent=99.5,
+        seller_super_seller=True,
+    )
+    pages = Pages({card.url: (FIXTURES / "offer-wago-221.html").read_text(encoding="utf-8")})
+    instance = client(tmp_path, rules, pages)
+    instance.cache.add_offer(card)
+    deep = instance.offer_detail("1000001", refresh=True)
+    assert deep.delivery_grosze == 1049
+    assert deep.sponsored is True
+    assert deep.thumbnail == "https://img/x.jpg"
+    assert deep.price == 4599
+    assert deep.seller_positive_percent == 99.5
+    assert deep.seller_super_seller is True

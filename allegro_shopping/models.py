@@ -56,6 +56,9 @@ class Seller:
     login: str
     rating: float | None = None
     ratings_count: int | None = None
+    # Allegro's own seller metric, present on every listing card: the share of
+    # positive buyer feedback. Cheaper and more reliable than the /oceny page.
+    positive_feedback_percent: float | None = None
     super_seller: bool = False
     smart: bool = False
     url: str | None = None
@@ -82,6 +85,8 @@ class Offer:
     condition: str | None = None
     rating_avg: float | None = None
     rating_count: int | None = None
+    seller_super_seller: bool | None = None
+    seller_positive_percent: float | None = None
     thumbnail: str | None = None
     description: str | None = None
     specs: dict[str, str] = field(default_factory=dict)
