@@ -71,10 +71,10 @@ def test_missing_specs_fail_a_required_spec(rules: Rules) -> None:
 
 
 def test_spec_match_is_substring_and_case_insensitive() -> None:
-    offer = make_offer(specs={"Model": "WAGO 221-413 100szt"})
-    assert spec_match(offer, {"model": "221-413"})[0] == 1.0
-    assert spec_match(offer, {"Model": "221-415"})[0] == 0.0
-    assert spec_match(make_offer(specs={}), {"Model": "x"})[0] is None
+    specs = {"Model": "WAGO 221-413 100szt"}
+    assert spec_match(specs, {"model": "221-413"})[0] == 1.0
+    assert spec_match(specs, {"Model": "221-415"})[0] == 0.0
+    assert spec_match({}, {"Model": "x"})[0] is None
 
 
 def test_rating_shrinkage_prefers_evidence(rules: Rules) -> None:

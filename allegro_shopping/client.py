@@ -20,7 +20,13 @@ from .config import Rules
 from .errors import FetchFailure, UsageError
 from .identity import canonical_url, listing_url, offer_id_from_url, seller_subject
 from .models import Offer, Product, Seller, utc_now
-from .parse import PARSER_REV, SkippedCard, parse_listing, parse_offer_page, parse_seller
+from .parse import (
+    SkippedCard,
+    parse_listing,
+    parse_offer_page,
+    parse_product_page,
+    parse_seller,
+)
 from .session import PageSource
 
 
@@ -76,29 +82,36 @@ class AllegroClient:
         if (
             cached is not None
             and not refresh
+            and cached.deep
             and self.cache.is_fresh("offer", cached.fetched_at, self.now())
-        ) and (cached.specs or not self.rules.site.offer_ready_selector):
+        ):
             return cached
         url = cached.url if cached is not None else f"{self.rules.site.base_url}/oferta/{offer_id}"
         markup = self.pages.fetch(url, self.rules.site.offer_ready_selector)
         detail = parse_offer_page(markup, url)
         self.cache.add_offer(detail.offer)
-        if detail.offer.product_id:
-            self.cache.add_product(
-                Product(
-                    product_id=detail.offer.product_id,
-                    title=detail.offer.title,
-                    url=detail.offer.url,
-                    ean=detail.offer.ean,
-                    specs=detail.specs,
-                    rating_avg=detail.offer.rating_avg,
-                    rating_count=detail.offer.rating_count,
-                    description=detail.offer.description,
-                    fetched_at=self.now(),
-                    parser_rev=PARSER_REV,
-                )
-            )
         return detail.offer
+
+    def product_detail(self, product_id: str, *, refresh: bool = False) -> Product:
+        """The catalog page: the spec table shared by every offer of this product.
+
+        Offer pages are seller claims; this is the identity of record, so it is
+        cached separately and never overwritten by offer data.
+        """
+        cached = self.cache.product(product_id)
+        if cached is not None and not refresh and self.cache.is_fresh(
+            "detail", cached.fetched_at, self.now()
+        ):
+            return cached
+        url = (
+            cached.url
+            if cached is not None
+            else f"{self.rules.site.base_url}/produkt/{product_id}"
+        )
+        markup = self.pages.fetch(url, self.rules.site.offer_ready_selector)
+        product = parse_product_page(markup, url)
+        self.cache.add_product(product)
+        return product
 
     def seller(self, login: str, *, refresh: bool = False) -> Seller | None:
         cached = self.cache.seller(login)

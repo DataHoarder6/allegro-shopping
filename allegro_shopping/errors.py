@@ -77,3 +77,9 @@ class PlanDrift(AllegroShoppingError):
     """A verified plan no longer matches the live offers."""
 
     exit_code = 9
+
+
+class LLMError(AllegroShoppingError):
+    """The model returned something that is not a valid answer to the prompt."""
+
+    exit_code = 10

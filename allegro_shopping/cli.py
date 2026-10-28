@@ -15,7 +15,7 @@ from pathlib import Path
 
 from web_agent.store import Store
 
-from . import __version__
+from . import __version__, llm
 from .cache import Cache
 from .client import AllegroClient
 from .config import Rules, load_request
@@ -156,6 +156,25 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_request_from_text(args: argparse.Namespace) -> int:
+    request = llm.request_from_text(args.text, runner=llm.run_opencode, model=args.model)
+    document = llm.request_to_toml(request)
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(document, encoding="utf-8")
+        print(f"wrote {out}")
+    else:
+        print(document, end="")
+    return 0
+
+
+def cmd_justify(args: argparse.Namespace) -> int:
+    payload = json.loads(Path(args.run_file).read_text(encoding="utf-8"))
+    print(llm.justify(payload, runner=llm.run_opencode, model=args.model))
+    return 0
+
+
 def cmd_cache(args: argparse.Namespace) -> int:
     rules = resolve_rules(args.rules)
     with _store(args) as store:
@@ -225,6 +244,17 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("url")
     capture.add_argument("--out", required=True)
     capture.set_defaults(func=cmd_capture)
+
+    from_text = sub.add_parser("request-from-text", help="turn prose into a request file")
+    from_text.add_argument("text")
+    from_text.add_argument("--out")
+    from_text.add_argument("--model")
+    from_text.set_defaults(func=cmd_request_from_text)
+
+    justify = sub.add_parser("justify", help="explain a run in prose (one LLM call)")
+    justify.add_argument("run_file")
+    justify.add_argument("--model")
+    justify.set_defaults(func=cmd_justify)
 
     cache_cmd = sub.add_parser("cache", help="inspect the hoard")
     cache_cmd.add_argument("action", choices=("stats", "offers"))

@@ -52,6 +52,8 @@ def _item_section(outcome: ItemOutcome, generated_at: datetime) -> list[str]:
     if len(outcome.ranked) > 5:
         lines.append("")
         lines.append(f"_{len(outcome.ranked) - 5} further eligible offers in the JSON._")
+    for offer_id, url in outcome.spec_sources[:1]:
+        lines += ["", f"specs of record: {url} (catalog page for offer {offer_id})"]
     if outcome.rejected:
         lines += ["", "Excluded:"]
         for offer, result in outcome.rejected[:5]:
@@ -135,6 +137,9 @@ def to_json(result: RunResult) -> dict[str, Any]:
                         },
                     }
                     for offer, res in outcome.ranked
+                ],
+                "spec_sources": [
+                    {"offer_id": offer_id, "url": url} for offer_id, url in outcome.spec_sources
                 ],
                 "rejected": [
                     {"offer_id": offer.offer_id, "gates": list(res.gate_failures)}

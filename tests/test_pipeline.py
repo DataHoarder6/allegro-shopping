@@ -213,3 +213,34 @@ def test_verify_requires_a_basket() -> None:
 
     with pytest.raises(NoCandidates, match="no basket"):
         verify_plan({"items": []}, Unused())  # type: ignore[arg-type]
+
+
+def test_catalog_specs_hydrate_a_required_spec(tmp_path: Path, rules: Rules) -> None:
+    from allegro_shopping.models import Product
+
+    product_id = "b4c19645-7c11-48a5-bfbe-c2ea5fbe9bc3"
+    offer = replace(
+        make_offer("1000001", price=4500, specs={}), product_id=product_id
+    )
+    client = make_client(tmp_path, rules, FakePages({}), [offer])
+    client.cache.add_product(
+        Product(
+            product_id=product_id,
+            title="WAGO 221-413",
+            url=f"https://allegro.pl/produkt/{product_id}",
+            specs={"Model": "221-413"},
+            fetched_at=NOW,
+        )
+    )
+    result = run_request(
+        build_request(make_item(required_specs={"Model": "221-413"})),
+        client,
+        rules,
+        now=lambda: NOW,
+    )
+    assert result.items[0].ranked
+    assert result.items[0].spec_sources == (
+        ("1000001", f"https://allegro.pl/produkt/{product_id}"),
+    )
+    markdown = to_markdown(result)
+    assert "specs of record" in markdown

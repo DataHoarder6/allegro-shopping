@@ -20,7 +20,7 @@ from .cache import Cache
 from .client import AllegroClient
 from .config import Budgets, Item, Request, Rules
 from .errors import BudgetExceeded, FetchFailure, NoCandidates
-from .models import Offer, Seller, utc_now
+from .models import Offer, Product, Seller, utc_now
 from .parse import PARSER_REV
 from .score import ScoreInput, ScoreResult, score_offer
 
@@ -84,6 +84,9 @@ class ItemOutcome:
     ranked: tuple[tuple[Offer, ScoreResult], ...]
     rejected: tuple[tuple[Offer, ScoreResult], ...]
     warnings: tuple[str, ...] = ()
+    # (offer_id, product page url) for every offer whose specs came from the
+    # catalog page rather than the seller's own text.
+    spec_sources: tuple[tuple[str, str], ...] = ()
 
     @property
     def best(self) -> tuple[Offer, ScoreResult] | None:
@@ -134,6 +137,8 @@ def run_request(
         shortlist = _select_candidates(offers, remaining_offers)
         remaining_offers -= len(shortlist)
         sellers: dict[str, Seller | None] = {}
+        products: dict[str, Product | None] = {}
+        spec_sources: list[tuple[str, str]] = []
         scored: list[tuple[Offer, ScoreResult]] = []
         rejected: list[tuple[Offer, ScoreResult]] = []
 
@@ -152,6 +157,23 @@ def run_request(
             if deep.seller_login not in sellers:
                 run_budget.spend_page()
                 sellers[deep.seller_login] = client.seller(deep.seller_login, refresh=refresh)
+            specs = deep.specs
+            if deep.product_id is not None:
+                if deep.product_id not in products:
+                    run_budget.spend_page()
+                    try:
+                        products[deep.product_id] = client.product_detail(
+                            deep.product_id, refresh=refresh
+                        )
+                    except FetchFailure as e:
+                        warnings.append(
+                            f"{item.label}: product page {deep.product_id} failed: {e.message}"
+                        )
+                        products[deep.product_id] = None
+                product = products[deep.product_id]
+                if product is not None:
+                    specs = {**deep.specs, **product.specs}
+                    spec_sources.append((deep.offer_id, product.url))
             result = score_offer(
                 item,
                 ScoreInput(
@@ -159,6 +181,7 @@ def run_request(
                     seller=sellers[deep.seller_login],
                     delivery_hours=None,
                     quantity=item.quantity,
+                    specs=specs if specs is not deep.specs else None,
                 ),
                 rules.score,
             )
@@ -175,7 +198,13 @@ def run_request(
             )
             raise NoCandidates(f"{item.label}: no offer passed the gates ({reasons})")
         outcomes.append(
-            ItemOutcome(item=item, ranked=tuple(scored), rejected=tuple(rejected), warnings=())
+            ItemOutcome(
+                item=item,
+                ranked=tuple(scored),
+                rejected=tuple(rejected),
+                warnings=(),
+                spec_sources=tuple(spec_sources),
+            )
         )
 
     shortlisted: list[Candidate] = []

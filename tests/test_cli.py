@@ -259,3 +259,68 @@ def test_verify_reports_drift(tmp_path: Path, fake_pages, monkeypatch, capsys) -
     assert code == 9
     assert "DRIFT" in captured.out
     assert "re-plan" in captured.err
+
+
+def test_request_from_text_writes_editable_toml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:  # type: ignore[no-untyped-def]
+    import json as _json
+
+    from allegro_shopping import llm
+
+    payload = {
+        "meta": {"name": "wago"},
+        "items": [
+            {
+                "label": "wago-3",
+                "query": "wago 221-413",
+                "quantity": 1,
+                "max_price_grosze": 6000,
+                "allow_used": False,
+            }
+        ],
+    }
+    monkeypatch.setattr(llm, "run_opencode", lambda prompt, model=None: _json.dumps(payload))
+    out = tmp_path / "request.toml"
+    code = main(["request-from-text", "one wago up to 60 zl", "--out", str(out)])
+    assert code == 0
+    assert "max_price_grosze = 6000" in out.read_text(encoding="utf-8")
+    # The file we wrote is accepted by the real loader.
+    from allegro_shopping.config import load_request
+
+    assert int(load_request(out).items[0].max_price_grosze) == 6000
+
+
+def test_request_from_text_rejects_a_budgetless_answer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:  # type: ignore[no-untyped-def]
+    import json as _json
+
+    from allegro_shopping import llm
+
+    payload = {
+        "meta": {"name": "wago"},
+        "items": [
+            {
+                "label": "wago-3",
+                "query": "wago",
+                "quantity": 1,
+                "max_price_grosze": 0,
+                "allow_used": False,
+            }
+        ],
+    }
+    monkeypatch.setattr(llm, "run_opencode", lambda prompt, model=None: _json.dumps(payload))
+    code = main(["request-from-text", "buy wago"])
+    assert code == 10
+    assert "no budget" in capsys.readouterr().err
+
+
+def test_justify_prints_model_text(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:  # type: ignore[no-untyped-def]
+    from allegro_shopping import llm
+
+    run_file = tmp_path / "run.json"
+    run_file.write_text('{"basket": null}', encoding="utf-8")
+    monkeypatch.setattr(llm, "run_opencode", lambda prompt, model=None: "It is cheaper.")
+    assert main(["justify", str(run_file)]) == 0
+    assert "It is cheaper." in capsys.readouterr().out

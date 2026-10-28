@@ -74,7 +74,19 @@ def test_offer_detail_parses_and_records_product(tmp_path: Path, rules: Rules) -
     assert detail.price == 4599
     assert detail.deep is True
     assert detail.product_id == product_id
+    # The offer page does not create the catalog row; only the product page does.
+    assert instance.cache.product(product_id) is None
+
+    product_url = f"https://allegro.pl/produkt/{product_id}"
+    pages.markup[product_url] = (FIXTURES / "product-wago-221.html").read_text(encoding="utf-8")
+    product = instance.product_detail(product_id)
+    assert product.ean == "4044918645118"
+    assert product.specs["Napięcie znamionowe"] == "450 V"
     assert instance.cache.product(product_id) is not None
+    # Second call is served from cache.
+    count = len(pages.fetched)
+    instance.product_detail(product_id)
+    assert len(pages.fetched) == count
 
 
 def test_offer_detail_without_cache_uses_canonical_url(tmp_path: Path, rules: Rules) -> None:
@@ -111,3 +123,12 @@ def test_capture_routes_by_page_kind(tmp_path: Path, rules: Rules) -> None:
     assert instance.capture(listing) == "markup"
     with pytest.raises(UsageError):
         instance.capture("https://allegro.pl/koszyk")
+
+
+def test_deep_offer_without_specs_is_not_refetched(tmp_path: Path, rules: Rules) -> None:
+    offer = replace(make_offer("1000001", price=4500, specs={}), deep=True)
+    pages = Pages({})
+    instance = client(tmp_path, rules, pages)
+    instance.cache.add_offer(offer)
+    assert instance.offer_detail("1000001").price == 4500
+    assert pages.fetched == []

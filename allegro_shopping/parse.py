@@ -21,7 +21,7 @@ from lxml.etree import ParserError
 
 from .errors import ParseError
 from .identity import canonical_url, offer_id_from_url, product_id_from_url
-from .models import Offer, Seller
+from .models import Offer, Product, Seller
 from .money import Grosze
 
 PARSER_REV = 1
@@ -394,6 +394,48 @@ def parse_offer_page(markup: str, url: str) -> OfferDetail:
     )
     assert provenance is not None
     return OfferDetail(offer=offer, specs=specs, provenance=provenance)
+
+
+def parse_product_page(markup: str, url: str) -> Product:
+    """Parse the catalog product page: the spec table of record for all offers.
+
+    Offer pages carry seller claims; the product page carries the shared
+    parameter table. Both are kept, with their own URL and timestamp.
+    """
+    canon = canonical_url(url)
+    product_id = product_id_from_url(canon)
+    if product_id is None:
+        raise ParseError(f"product page URL has no product uuid: {url}")
+    products = _json_ld_products(markup)
+    product = products[0] if products else {}
+    name = product.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ParseError("product page has no name")
+    brand = product.get("brand")
+    if isinstance(brand, dict):
+        brand = brand.get("name")
+    rating = product.get("aggregateRating")
+    rating_avg = rating_count = None
+    if isinstance(rating, dict):
+        rating_avg = _float_or_none(rating.get("ratingValue"))
+        rating_count = _int_or_none(rating.get("reviewCount") or rating.get("ratingCount"))
+    ean = product.get("gtin13") or product.get("gtin") or product.get("ean")
+    description = product.get("description")
+    specs = parse_specs(markup)
+    if isinstance(brand, str):
+        specs.setdefault("Marka", brand)
+    return Product(
+        product_id=product_id,
+        title=name.strip(),
+        url=canon,
+        ean=str(ean) if isinstance(ean, (str, int)) else None,
+        brand=brand if isinstance(brand, str) else None,
+        specs=specs,
+        rating_avg=rating_avg,
+        rating_count=rating_count,
+        description=description if isinstance(description, str) else None,
+        parser_rev=PARSER_REV,
+    )
 
 
 def parse_seller(markup: str, login: str, url: str) -> Seller:

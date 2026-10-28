@@ -26,7 +26,13 @@ class ScoreInput:
     seller: Seller | None
     delivery_hours: float | None
     quantity: int
-    specs_verified: bool = False
+    # Specs of record: offer claims overlaid with the catalog product page.
+    # None means "use the offer's own specs".
+    specs: dict[str, str] | None = None
+
+    @property
+    def effective_specs(self) -> dict[str, str]:
+        return self.specs if self.specs is not None else self.offer.specs
 
 
 @dataclass(frozen=True)
@@ -80,15 +86,15 @@ def shrunk_rating(rating: float | None, count: int | None, rules: ScoreRules) ->
     return (reviews * rating + weight * prior) / (reviews + weight)
 
 
-def spec_match(offer: Offer, required: Mapping[str, str]) -> tuple[float | None, bool]:
+def spec_match(specs: Mapping[str, str], required: Mapping[str, str]) -> tuple[float | None, bool]:
     """Fraction of required specs present and matching. Unknown when no spec data."""
     if not required:
         return 1.0, False
-    if not offer.specs:
+    if not specs:
         return None, False
     matched = 0
     for key, expected in required.items():
-        actual = next((v for k, v in offer.specs.items() if k.lower() == key.lower()), None)
+        actual = next((v for k, v in specs.items() if k.lower() == key.lower()), None)
         if actual is None:
             continue
         if expected.strip().lower() in actual.strip().lower():
@@ -96,7 +102,9 @@ def spec_match(offer: Offer, required: Mapping[str, str]) -> tuple[float | None,
     return matched / len(required), True
 
 
-def gate_failures(item: Item, offer: Offer, seller: Seller | None) -> tuple[str, ...]:
+def gate_failures(
+    item: Item, offer: Offer, seller: Seller | None, specs: Mapping[str, str] | None = None
+) -> tuple[str, ...]:
     failures: list[str] = []
     if offer.price > item.max_price_grosze:
         failures.append(
@@ -115,13 +123,14 @@ def gate_failures(item: Item, offer: Offer, seller: Seller | None) -> tuple[str,
         elif offer.rating_avg < item.min_rating:
             failures.append(f"rating {offer.rating_avg:.2f} below minimum {item.min_rating:.2f}")
     if item.required_specs:
-        if not offer.specs:
+        known = specs if specs is not None else offer.specs
+        if not known:
             failures.append("required specs, no spec data on the offer")
         else:
             missing = [
                 key
                 for key in item.required_specs
-                if not any(k.lower() == key.lower() for k in offer.specs)
+                if not any(k.lower() == key.lower() for k in known)
             ]
             if missing:
                 failures.append(f"missing specs {missing}")
@@ -133,7 +142,8 @@ def gate_failures(item: Item, offer: Offer, seller: Seller | None) -> tuple[str,
 def score_offer(item: Item, candidate: ScoreInput, rules: ScoreRules) -> ScoreResult:
     """Score one offer for one item. Gates are evaluated first and are final."""
     offer = candidate.offer
-    failures = gate_failures(item, offer, candidate.seller)
+    effective_specs = candidate.effective_specs
+    failures = gate_failures(item, offer, candidate.seller, effective_specs)
     weights = dict(rules.weights)
     if failures:
         return ScoreResult(
@@ -173,7 +183,7 @@ def score_offer(item: Item, candidate: ScoreInput, rules: ScoreRules) -> ScoreRe
     product_rating = shrunk_rating(offer.rating_avg, offer.rating_count, rules)
     rating_value = None if product_rating is None else _clamp(product_rating / 5.0)
 
-    specs_value, _verified = spec_match(offer, item.required_specs)
+    specs_value, _verified = spec_match(effective_specs, item.required_specs)
 
     delivery_value = None
     if candidate.delivery_hours is not None:

@@ -187,3 +187,24 @@ def test_parse_seller_from_boxes_and_text() -> None:
     assert seller.rating == pytest.approx(4.91)
     assert seller.ratings_count == 1234
     assert seller.super_seller is True
+
+
+def test_parse_product_page_keeps_specs_and_provenance_fields() -> None:
+    from allegro_shopping.parse import parse_product_page
+
+    product = parse_product_page(
+        (FIXTURES / "product-wago-221.html").read_text(encoding="utf-8"),
+        "https://allegro.pl/produkt/wago-221-413-b4c19645-7c11-48a5-bfbe-c2ea5fbe9bc3",
+    )
+    assert product.product_id == "b4c19645-7c11-48a5-bfbe-c2ea5fbe9bc3"
+    assert product.ean == "4044918645118"
+    assert product.brand == "WAGO"
+    assert product.rating_count == 241
+    assert product.specs["Napięcie znamionowe"] == "450 V"
+
+
+def test_product_page_without_uuid_is_an_error() -> None:
+    from allegro_shopping.parse import parse_product_page
+
+    with pytest.raises(ParseError, match="uuid"):
+        parse_product_page("<html></html>", "https://allegro.pl/oferta/x-123456")
