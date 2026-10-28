@@ -9,17 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout web-agent (library dependency)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: DataHoarder6/web-agent
           path: web-agent
           ssh-key: ${{ secrets.WEB_AGENT_DEPLOY_KEY }}
       - name: Checkout allegro-shopping
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: allegro-shopping
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10
       - name: Install dependencies
         run: uv sync
         working-directory: allegro-shopping
