@@ -21,15 +21,15 @@
 
       # A wrapper for the checkout, not a sealed store build: the Python
       # environment is the uv venv, which must live in a writable directory.
-      # Install with home-manager: allegro-shop = inputs.allegro-shopping.packages.${system}.default;
+      # The repo path is explicit (ALLEGRO_SHOP_REPO or the home checkout); a
+      # missing venv is an error, never a silent fallback.
       packages.${system}.default = pkgs.writeShellScriptBin "allegro-shop" ''
         set -euo pipefail
-        repo="''${ALLEGRO_SHOP_REPO:-${repo}}"
-        if [ ! -d "$repo/.venv" ] && [ ! -d "$HOME/git/allegro-shopping/.venv" ]; then
-          echo "allegro-shop: no uv venv; run 'uv sync' in $repo" >&2
+        repo="''${ALLEGRO_SHOP_REPO:-$HOME/git/allegro-shopping}"
+        if [ ! -d "$repo/.venv" ]; then
+          echo "allegro-shop: no uv venv at $repo; run 'uv sync' there" >&2
           exit 1
         fi
-        if [ ! -d "$repo/.venv" ]; then repo="$HOME/git/allegro-shopping"; fi
         export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath runtimeLibs}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
         exec "${pkgs.uv}/bin/uv" run --project "$repo" allegro-shop "$@"
       '';
