@@ -72,6 +72,13 @@ def source(rules: Rules, tmp_path: Path) -> PlaywrightPageSource:
     return PlaywrightPageSource(rules, BrowserSettings(profile=tmp_path / "profile"), Store())  # type: ignore[arg-type]
 
 
+def test_profile_is_coerced_to_a_path() -> None:
+    from allegro_shopping.session import BrowserSettings
+
+    settings = BrowserSettings(profile="~/somewhere")  # type: ignore[arg-type]
+    assert settings.profile == Path("~/somewhere")
+
+
 def test_fetch_returns_markup_after_ready_selector(rules: Rules, tmp_path: Path) -> None:
     instance = source(rules, tmp_path)
     page = FakePage([LISTING])

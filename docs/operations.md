@@ -30,6 +30,15 @@ loop, never reach for a proxy or a stealth browser: the profile is the identity.
 Captured evidence of the interstitial lives at
 `tests/fixtures/allegro/blocked-datadome.html`.
 
+### Live check (manual)
+
+```sh
+ALLEGRO_SHOP_LIVE=1 uv run pytest -m live -q
+```
+
+One listing page, read-only. It fails on a wall instead of skipping: a silent
+skip would hide exactly the condition it exists to catch.
+
 ## Cache
 
 ```sh

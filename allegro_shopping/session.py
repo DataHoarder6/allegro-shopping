@@ -50,6 +50,9 @@ class BrowserSettings:
     headless: bool = False
     wall_reloads: int = 1
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "profile", Path(self.profile))
+
     @classmethod
     def for_rules(cls, rules: Rules, profile: Path | None = None) -> BrowserSettings:
         del rules  # posture comes from rules.site, not from settings
