@@ -26,6 +26,7 @@ prices, sums or the winner.
 | Task | Command |
 |---|---|
 | environment check | `uv run allegro-shop doctor` |
+| everything CI runs | `./scripts/check.sh` |
 | tests (offline) | `uv run pytest` |
 | coverage gate (85%) | `uv run pytest --cov` |
 | lint / types | `uv run ruff check .` · `uv run mypy` |

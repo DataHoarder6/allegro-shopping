@@ -6,7 +6,7 @@
   outputs = { self, nixpkgs }:
     let
       system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
+      pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
       python = pkgs.python313;
       runtimeLibs = [ pkgs.stdenv.cc.cc.lib pkgs.zlib pkgs.glib ];
       repo = "${self}";
