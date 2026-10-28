@@ -63,5 +63,15 @@ clock. Exceeding it fails the run.
 **Capture** — saving a page's HTML as a test fixture, with personal data
 redacted before commit.
 
+**Specs of record** — the catalog product page's parameter table
+(`/produkt/<uuid>`), merged over an offer's own seller-written specs for scoring
+and gates. Both rows keep their own URL and timestamp.
+
+**Spec source** — the URL and fetch time behind a spec fact. Shown in the
+report; never inferred.
+
+**LLM edge** — the two places a model is allowed: prose → request TOML
+(`request-from-text`), and run → prose (`justify`). Neither can change a number.
+
 **Bot-wall** — a challenge page (DataDome on Allegro). Stop, tell the human,
 resume after they clear it in the visible browser.

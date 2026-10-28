@@ -54,6 +54,18 @@ Hoard location: `$XDG_DATA_HOME/allegro-shopping/hoard.db` (override `--db`).
 Point `--db` at `~/git/web-agent/cache/web-agent.db` to share the hoard with
 other consumers.
 
+## Prose in, prose out
+
+```sh
+uv run allegro-shop request-from-text "dwa wago 221-413 do 60 zl, tylko nowe" --out /tmp/req.toml
+$EDITOR /tmp/req.toml        # inspect before anything is fetched
+uv run allegro-shop plan /tmp/req.toml
+uv run allegro-shop justify runs/<stamp>.json
+```
+
+Both commands make exactly one `opencode run` call. A malformed answer exits 10
+and is never repaired; a missing budget is refused, not invented.
+
 ## Tuning
 
 - `basket.smart_active`: set `false` if you do not subscribe to Smart!; then

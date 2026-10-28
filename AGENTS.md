@@ -35,6 +35,9 @@ prices, sums or the winner.
 | score breakdown | `uv run allegro-shop explain <offer_id> --request R --item L` |
 | new fixture | `uv run allegro-shop capture <url> --out tests/fixtures/allegro/<name>.html` |
 | hoard stats | `uv run allegro-shop cache stats` |
+| prose → request file | `uv run allegro-shop request-from-text "<prose>" --out req.toml` |
+| explain a finished run | `uv run allegro-shop justify runs/<stamp>.json` |
+| re-check a plan live | `uv run allegro-shop verify runs/<stamp>.json` |
 
 `LD_LIBRARY_PATH` must point at a gcc lib dir on NixOS when Playwright is
 imported (`nix develop` sets it).
