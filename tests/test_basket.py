@@ -22,6 +22,7 @@ def candidate(
     quantity: int = 1,
     score: float = 50.0,
     delivery_grosze: int | None = None,
+    smart: bool | None = None,
 ) -> Candidate:
     return Candidate(
         item_label=item,
@@ -30,6 +31,7 @@ def candidate(
             price=price,
             seller=seller,
             delivery_grosze=delivery_grosze,
+            smart=smart,
             specs={"Model": "x"},
             rating_avg=4.5,
             rating_count=50,
@@ -45,12 +47,32 @@ def rules_with(rules: Rules, **overrides: object) -> BasketRules:
 
 def test_free_delivery_at_threshold(rules: Rules) -> None:
     basket_rules = rules_with(rules, sellers_max=1)
-    under = plan([candidate("a", "1000001", 4000, "s1")], basket_rules)
+    under = plan([candidate("a", "1000001", 4000, "s1", smart=True)], basket_rules)
     assert under.delivery_total == basket_rules.locker_delivery_grosze
 
-    over = plan([candidate("a", "1000001", 5000, "s1")], basket_rules)
+    over = plan([candidate("a", "1000001", 5000, "s1", smart=True)], basket_rules)
     assert over.delivery_total == 0
     assert over.slices[0].free_delivery is True
+
+
+def test_non_smart_offer_never_gets_free_delivery(rules: Rules) -> None:
+    basket_rules = rules_with(rules, sellers_max=1)
+    basket = plan([candidate("a", "1000001", 9000, "s1", smart=False)], basket_rules)
+    assert basket.delivery_total == basket_rules.locker_delivery_grosze
+    assert basket.slices[0].free_delivery is False
+
+
+def test_mixed_seller_charges_delivery_for_the_non_smart_line(rules: Rules) -> None:
+    basket_rules = rules_with(rules, sellers_max=1)
+    basket = plan(
+        [
+            candidate("a", "1000001", 6000, "s1", smart=True),
+            candidate("b", "1000002", 5000, "s1", smart=False),
+        ],
+        basket_rules,
+    )
+    assert basket.delivery_total == basket_rules.locker_delivery_grosze
+    assert basket.slices[0].free_delivery is False
 
 
 def test_smart_disabled_always_charges(rules: Rules) -> None:
@@ -82,7 +104,8 @@ def test_consolidation_beats_two_sellers(rules: Rules) -> None:
     basket = plan(candidates, basket_rules)
     assert basket.sellers_used == 1
     assert basket.slices[0].seller == "s2"
-    assert basket.grand_total == 3400 + 3000  # one seller, above threshold, free delivery
+    # Non-Smart offers never ship free: consolidation saves the second parcel fee.
+    assert basket.grand_total == 3400 + 3000 + basket_rules.locker_delivery_grosze
 
 
 def test_cheaper_split_beats_forced_consolidation(rules: Rules) -> None:

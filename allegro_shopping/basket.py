@@ -84,8 +84,13 @@ def seller_delivery_fee(offers: Sequence[Offer], rules: BasketRules) -> Grosze:
     )
 
 
-def delivery_for(subtotal: int, fee: int, rules: BasketRules) -> int:
-    if rules.smart_active and subtotal >= rules.smart_minimum_grosze:
+def is_smart_eligible(lines: Sequence[BasketLine]) -> bool:
+    """Smart! covers only offers flagged Smart! — a plain seller offer pays its fee."""
+    return all(line.offer.smart is True for line in lines)
+
+
+def delivery_for(subtotal: int, fee: int, rules: BasketRules, *, smart_eligible: bool) -> int:
+    if rules.smart_active and smart_eligible and subtotal >= rules.smart_minimum_grosze:
         return 0
     return fee
 
@@ -114,13 +119,15 @@ def evaluate(
 ) -> int:
     """Total grosze for one assignment, under the same rules the solver uses."""
     subtotal: dict[str, int] = {}
+    smart: dict[str, bool] = {}
     total = 0
     for candidate in selection.values():
         total += int(candidate.line_goods)
         seller = candidate.offer.seller_login
         subtotal[seller] = subtotal.get(seller, 0) + int(candidate.line_goods)
+        smart[seller] = smart.get(seller, True) and candidate.offer.smart is True
     for seller, subtotal_grosze in subtotal.items():
-        total += delivery_for(subtotal_grosze, fee[seller], rules)
+        total += delivery_for(subtotal_grosze, fee[seller], rules, smart_eligible=smart[seller])
         if include_penalty:
             total += rules.seller_penalty_grosze
     return total
@@ -188,6 +195,10 @@ def plan(candidates: Sequence[Candidate], rules: BasketRules) -> BasketPlan:
         if rules.smart_active:
             model.Add(subtotals[seller] >= rules.smart_minimum_grosze * z[seller])
             model.Add(z[seller] <= y[seller])
+            # Free delivery needs every chosen line from this seller to be Smart!.
+            for c in candidates:
+                if c.offer.seller_login == seller and c.offer.smart is not True:
+                    model.Add(z[seller] + x[(c.item_label, c.offer.offer_id)] <= 1)
         else:
             model.Add(z[seller] == 0)
         # A seller with a zero subtotal may not be marked used.
@@ -275,7 +286,8 @@ def _slices(
     for seller in sorted(grouped):
         lines = tuple(sorted(grouped[seller], key=lambda line: line.item_label))
         subtotal = sum(int(line.goods) for line in lines)
-        delivery = delivery_for(subtotal, fee[seller], rules)
+        eligible = is_smart_eligible(lines)
+        delivery = delivery_for(subtotal, fee[seller], rules, smart_eligible=eligible)
         slices.append(
             SellerSlice(
                 seller=seller,
@@ -284,6 +296,7 @@ def _slices(
                 delivery=Grosze(delivery),
                 free_delivery=delivery == 0
                 and rules.smart_active
+                and eligible
                 and subtotal >= rules.smart_minimum_grosze,
             )
         )

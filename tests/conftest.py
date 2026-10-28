@@ -31,6 +31,7 @@ def make_offer(
     rating_count: int | None = 112,
     specs: dict[str, str] | None = None,
     delivery_grosze: int | None = None,
+    smart: bool | None = None,
     fetched_at: datetime | None = None,
     deep: bool = True,
 ) -> Offer:
@@ -46,6 +47,7 @@ def make_offer(
         rating_count=rating_count,
         specs={"Model": "221-413"} if specs is None else specs,
         delivery_grosze=None if delivery_grosze is None else Grosze(delivery_grosze),
+        smart=smart,
         fetched_at=fetched_at or datetime(2026, 10, 28, 12, 0, tzinfo=UTC),
         deep=deep,
     )
